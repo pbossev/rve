@@ -1,0 +1,32 @@
+[package]
+name = "rve"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "rve"
+path = "src/lib.rs"
+
+[dependencies]
+crossterm = "0.29.0"
+image = "0.25.8"
+viuer = { version = "0.9.2", features = ["print-file"] }
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "frame_pipeline"
+harness = false
+
+[[bench]]
+name = "export"
+harness = false
+
+# https://github.com/johnthagen/min-sized-rust 🦀
+[profile.release]
+opt-level = "z"     # Optimize for size.
+lto = true          # Enable Link Time Optimization
+codegen-units = 1   # Reduce number of codegen units to increase optimizations.
+panic = "abort"     # Abort on panic
+strip = true        # Automatically strip symbols from the binary.
