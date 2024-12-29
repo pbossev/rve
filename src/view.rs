@@ -304,21 +304,7 @@ pub fn view(m: &Model, out: &mut impl Write) -> std::io::Result<()> {
     )?;
 
     // controls/helps
-    if m.exit_prompt {
-        let prompt_str = " Are you sure you want to exit? (make sure you save) [y/N] ";
-        let padding = m.terminal_cols.saturating_sub(prompt_str.len() as u16) / 2;
-        queue!(
-            out,
-            MoveTo(padding, ui_start_row + 4),
-            style::SetBackgroundColor(style::Color::Red),
-            style::SetForegroundColor(style::Color::White),
-            SetAttribute(style::Attribute::Bold),
-            Print(prompt_str),
-            SetAttribute(style::Attribute::Reset),
-            style::SetBackgroundColor(style::Color::Reset),
-            style::SetForegroundColor(style::Color::Reset),
-        )?;
-    } else if !m.hide_controls {
+    if !m.hide_controls {
         let mut seg_controls = vec![
             "v mark/unmark",
             "t toggle segment",
@@ -375,6 +361,32 @@ pub fn view(m: &Model, out: &mut impl Write) -> std::io::Result<()> {
             MoveToColumn(0),
             Print(" ".repeat(m.terminal_cols as usize)),
             MoveToNextLine(1)
+        )?;
+    }
+
+    if m.exit_prompt {
+        let line1 = " Confirm exit? (make sure you save) ";
+        let line2 = " [Y]es/[N]o ";
+
+        let center_row = ui_start_row / 2;
+        let pad1 = m.terminal_cols.saturating_sub(line1.len() as u16) / 2;
+        let pad2 = m.terminal_cols.saturating_sub(line2.len() as u16) / 2;
+
+        queue!(
+            out,
+            MoveTo(pad1, center_row.saturating_sub(1)),
+            style::SetBackgroundColor(style::Color::Red),
+            style::SetForegroundColor(style::Color::White),
+            SetAttribute(style::Attribute::Bold),
+            Print(line1),
+            MoveTo(pad2, center_row),
+            style::SetBackgroundColor(style::Color::Red),
+            style::SetForegroundColor(style::Color::White),
+            SetAttribute(style::Attribute::Bold),
+            Print(line2),
+            SetAttribute(style::Attribute::Reset),
+            style::SetBackgroundColor(style::Color::Reset),
+            style::SetForegroundColor(style::Color::Reset),
         )?;
     }
 
