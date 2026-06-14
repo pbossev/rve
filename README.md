@@ -160,14 +160,21 @@ RVE uses [Criterion.rs](https://bheisler.github.io/criterion.rs/book/index.html)
 
 - **`frame_pipeline`**: Measures the raw throughput of pulling frames through the `BufReader` and constructing `image::RgbImage` structs. By reusing buffers, the overhead of the Rust pipeline is practically zero, bounded entirely by `ffmpeg`'s decode speed.
 - **`export`**: Compares the speed of sequential vs parallel exporting. Due to the parallel threading architecture, exporting multiple segments concurrently yields significant speedups (e.g., a ~3.3x speedup when exporting 4 segments on modern hardware) since `ffmpeg` copy operations are largely I/O and stream-parse bound.
+- **`renderer`**: Compares the custom differential terminal renderer against the legacy `viuer` renderer. The differential renderer tracks frame states and only writes ANSI escape codes for the exact pixels that change. This dramatically cuts down terminal I/O overhead, leading to massive real-world performance gains during static or low-motion scenes.
 
 ### Reference Results (Ryzen 5 5500 + RTX 3080)
 
-| Benchmark | Test | Time (avg) | Throughput | Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| `segment_export` | `sequential` | ~399.65 ms | - | 4 segments of 5 seconds each |
-| `segment_export` | `parallel` | ~115.80 ms | - | ~3.45x speedup over sequential |
-| `frame_decode` | `take_frame_lowres` | ~40.23 ms | ~24.85 fps | `rawvideo` pipe decode overhead |
+| Benchmark        | Test                       | Time (avg) | Throughput | Notes                            |
+| :--------------- | :------------------------- | :--------- | :--------- | :------------------------------- |
+| `segment_export` | `sequential`               | ~399.65 ms | -          | 4 segments of 5 seconds each     |
+| `segment_export` | `parallel`                 | ~115.80 ms | -          | ~3.45x speedup over sequential   |
+| `frame_decode`   | `take_frame_lowres`        | ~40.23 ms  | ~24.85 fps | `rawvideo` pipe decode overhead  |
+| `renderers`      | `differential_0_percent`   | ~33.58 µs  | -          | 0% frame change (static scene)   |
+| `renderers`      | `differential_10_percent`  | ~108.13 µs | -          | 10% frame change                 |
+| `renderers`      | `differential_100_percent` | ~690.87 µs | -          | 100% frame change (full redraw)  |
+| `renderers`      | `viuer_renderer`           | ~692.38 µs | -          | Legacy renderer (see note below) |
+
+_Note on `viuer_renderer`: The benchmark uses `gag` to intercept and suppress terminal stdout. In the real application, `viuer` redraws the entire frame and writes ~140KB of ANSI strings to the terminal every frame, causing massive terminal emulator lag. The differential renderer's true speedup comes from avoiding this I/O bottleneck._
 
 You can run the benchmarks yourself with:
 

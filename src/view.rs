@@ -49,7 +49,7 @@ pub fn calculate_render_size(
     }
 }
 
-pub fn view(m: &Model, out: &mut impl Write) -> std::io::Result<()> {
+pub fn view(m: &mut Model, out: &mut impl Write) -> std::io::Result<()> {
     if m.needs_to_clear {
         queue!(out, terminal::Clear(terminal::ClearType::All))?;
     }
@@ -74,18 +74,44 @@ pub fn view(m: &Model, out: &mut impl Write) -> std::io::Result<()> {
     ui_start_row = char_h as u16;
 
     if let Some(img) = &m.current_frame {
-        let cfg = viuer::Config {
-            x: x_offset,
-            y: 0,
-            width: Some(char_w as u32),
-            height: Some(char_h as u32),
-            absolute_offset: true,
-            use_kitty: m.display_mode == DisplayMode::HighResPixel,
-            use_iterm: m.display_mode == DisplayMode::HighResPixel,
-            ..Default::default()
-        };
-
-        let _ = viuer::print(&image::DynamicImage::ImageRgb8(img.clone()), &cfg);
+        #[cfg(feature = "viuer")]
+        {
+            if m.display_mode == DisplayMode::HighResPixel {
+                let cfg = viuer::Config {
+                    x: x_offset,
+                    y: 0,
+                    width: Some(char_w as u32),
+                    height: Some(char_h as u32),
+                    absolute_offset: true,
+                    use_kitty: m.display_mode == DisplayMode::HighResPixel,
+                    use_iterm: m.display_mode == DisplayMode::HighResPixel,
+                    ..Default::default()
+                };
+                let _ = viuer::print(&image::DynamicImage::ImageRgb8(img.clone()), &cfg);
+            } else {
+                render_differential(
+                    &mut m.terminal_state,
+                    m.needs_to_clear,
+                    out,
+                    img,
+                    x_offset,
+                    char_w as u16,
+                    char_h as u16,
+                )?;
+            }
+        }
+        #[cfg(not(feature = "viuer"))]
+        {
+            render_differential(
+                &mut m.terminal_state,
+                m.needs_to_clear,
+                out,
+                img,
+                x_offset,
+                char_w as u16,
+                char_h as u16,
+            )?;
+        }
     }
 
     queue!(out, MoveTo(0, ui_start_row))?;
@@ -389,6 +415,98 @@ pub fn view(m: &Model, out: &mut impl Write) -> std::io::Result<()> {
             style::SetForegroundColor(style::Color::Reset),
         )?;
     }
+
+    Ok(())
+}
+
+pub fn render_differential(
+    state: &mut crate::model::TerminalState,
+    needs_to_clear: bool,
+    out: &mut impl Write,
+    img: &image::RgbImage,
+    x_offset: u16,
+    width: u16,
+    height: u16,
+) -> std::io::Result<()> {
+    let expected_len = (width as usize) * (height as usize);
+    if state.blocks.len() != expected_len || state.width != width || needs_to_clear {
+        state.width = width;
+        state.height = height;
+        // reset with black to force redraw on first frame
+        state.blocks = vec![(image::Rgb([0, 0, 0]), image::Rgb([0, 0, 0])); expected_len];
+        // don't set needs_to_clear here, as it might cause infinite loop of clearing
+        // but we must treat all blocks as dirty if we just recreated them
+    }
+
+    let mut current_fg: Option<image::Rgb<u8>> = None;
+    let mut current_bg: Option<image::Rgb<u8>> = None;
+
+    for row in 0..height {
+        let mut cursor_moved = false;
+
+        for col in 0..width {
+            let img_x = col as u32;
+            let img_y_top = (row as u32) * 2;
+            let img_y_bot = img_y_top + 1;
+
+            let top_color = if img_x < img.width() && img_y_top < img.height() {
+                *img.get_pixel(img_x, img_y_top)
+            } else {
+                image::Rgb([0, 0, 0])
+            };
+
+            let bot_color = if img_x < img.width() && img_y_bot < img.height() {
+                *img.get_pixel(img_x, img_y_bot)
+            } else {
+                image::Rgb([0, 0, 0])
+            };
+
+            let idx = (row as usize) * (width as usize) + (col as usize);
+            let prev_colors = state.blocks[idx];
+
+            if needs_to_clear || prev_colors != (top_color, bot_color) {
+                if !cursor_moved {
+                    queue!(out, MoveTo(x_offset + col, row))?;
+                    cursor_moved = true;
+                }
+
+                if current_fg != Some(top_color) {
+                    queue!(
+                        out,
+                        style::SetForegroundColor(style::Color::Rgb {
+                            r: top_color[0],
+                            g: top_color[1],
+                            b: top_color[2]
+                        })
+                    )?;
+                    current_fg = Some(top_color);
+                }
+
+                if current_bg != Some(bot_color) {
+                    queue!(
+                        out,
+                        style::SetBackgroundColor(style::Color::Rgb {
+                            r: bot_color[0],
+                            g: bot_color[1],
+                            b: bot_color[2]
+                        })
+                    )?;
+                    current_bg = Some(bot_color);
+                }
+
+                queue!(out, Print("▀"))?;
+                state.blocks[idx] = (top_color, bot_color);
+            } else {
+                cursor_moved = false;
+            }
+        }
+    }
+
+    queue!(
+        out,
+        style::SetForegroundColor(style::Color::Reset),
+        style::SetBackgroundColor(style::Color::Reset)
+    )?;
 
     Ok(())
 }

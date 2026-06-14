@@ -12,8 +12,11 @@ use std::{error::Error, io::Write};
 
 fn init() -> Result<Model, String> {
     let (cols, rows) = terminal::size().map_err(|e| format!("terminal size: {}", e))?;
+    #[cfg(feature = "viuer")]
     let high_res_available =
         (viuer::get_kitty_support() != viuer::KittySupport::None) | viuer::is_iterm_supported();
+    #[cfg(not(feature = "viuer"))]
+    let high_res_available = false;
 
     let args: Vec<_> = std::env::args().collect();
     let mut single_output = false;
@@ -71,7 +74,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     // Initial draw
     if update::update(&mut model, Event::Key(KeyCode::Null.into()))? {
-        view::view(&model, &mut stdout)?;
+        view::view(&mut model, &mut stdout)?;
         stdout.flush()?;
         model.needs_to_clear = false;
     }
@@ -99,7 +102,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
 
         if update::update(&mut model, event)? {
-            view::view(&model, &mut stdout)?;
+            view::view(&mut model, &mut stdout)?;
             stdout.flush()?;
             if model.needs_to_clear {
                 model.needs_to_clear = false;
@@ -132,7 +135,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             )?;
             model.needs_to_clear = true;
             model.prev_instant = std::time::Instant::now();
-            view::view(&model, &mut stdout)?;
+            view::view(&mut model, &mut stdout)?;
             stdout.flush()?;
         }
 

@@ -25,6 +25,13 @@ pub struct Hovering {
     pub position: usize,
 }
 
+#[derive(Clone, Default)]
+pub struct TerminalState {
+    pub width: u16,
+    pub height: u16,
+    pub blocks: Vec<(image::Rgb<u8>, image::Rgb<u8>)>,
+}
+
 pub struct Model {
     pub terminal_cols: u16,
     pub terminal_rows: u16,
@@ -49,6 +56,7 @@ pub struct Model {
     pub exit_prompt: bool,
     pub is_saving: bool,
     pub should_exit: bool,
+    pub terminal_state: TerminalState,
 }
 
 #[derive(Clone)]
@@ -107,6 +115,7 @@ impl Model {
             exit_prompt: false,
             is_saving: false,
             should_exit: false,
+            terminal_state: TerminalState::default(),
         })
     }
 }
