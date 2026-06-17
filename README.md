@@ -8,6 +8,10 @@ A minimal, terminal-based video segment cutter written in Rust. It uses `ffmpeg`
 
 This project’s code is under the [MIT](https://choosealicense.com/licenses/mit/) license.
 
+## Motivation
+
+I had a bunch of NVIDIA shadowplay clips sitting around and needed a quicker way to do simple tasks like cutting out the important clip from 5-minute, multi-GB files. Fed up with the tedious import, mark, cut, export process with software like OBS or the inbuilt Windows editor (which would hang for multiple minutes on exporting), I built this.
+
 ## Features
 
 - **In-Terminal Playback**: Uses `viuer` to render video directly in the terminal.
