@@ -1,6 +1,6 @@
 # RVE (Rust Video Editor)
 
-A minimal, terminal-based video segment cutter written in Rust. It uses `ffmpeg` for processing and `viuer` for in-terminal video playback.
+A minimal, terminal-based video segment cutter written in Rust. It uses `ffmpeg` for processing and a custom differential renderer (with legacy `viuer` support) for in-terminal video playback.
 
 ![A screenshot of RVE](https://github.com/pbossev/rve/blob/main/demo/demo.png?raw=true)
 
@@ -14,7 +14,7 @@ I had a bunch of NVIDIA shadowplay clips sitting around and needed a quicker way
 
 ## Features
 
-- **In-Terminal Playback**: Uses `viuer` to render video directly in the terminal.
+- **In-Terminal Playback**: Uses a custom, high-performance differential ANSI renderer for default low-res playback, with legacy `viuer` support retained (includes high-res Kitty/iTerm protocols).
 - **Two Display Modes**:
   - **Low-Res**: Fast, block-based rendering that works in most terminals.
   - **High-Res**: Pixel-based rendering using Kitty or iTerm graphics protocols (if supported).
@@ -78,7 +78,7 @@ Based on the `--help` menu:
 
 - `<filepath>`: (Required) The path to the video file you want to edit.
 - `--single-output`, `-s`: On exit, concatenate all "included" segments into one file (e.g., `filename_concat.mp4`). If omitted, it defaults to multi-file mode.
-- `--high-res`, `-r`: Start the application in high-resolution pixel mode. This only works if your terminal (e.g., Kitty, WezTerm) supports the necessary graphics protocols.
+- `--high-res`, `-r`: Start the application in high-resolution pixel mode. This only works if your terminal (e.g., Kitty, WezTerm) supports the necessary graphics protocols, and `viuer` is selected as the renderer.
 - `--help`, `-h`: Show the help menu.
 
 ## Keybinds
