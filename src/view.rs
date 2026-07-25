@@ -34,7 +34,7 @@ pub fn calculate_render_size(
     };
 
     if mode == DisplayMode::LowResBlock {
-        (w.round() as i32, (h / 2.0).round() as i32)
+        (w.round() as i32, ((h / 2.0).round() as i32) * 2)
     } else {
         let original_w = meta.width as f64;
         let original_h = meta.height as f64;
@@ -60,18 +60,20 @@ pub fn view(m: &mut Model, out: &mut impl Write) -> std::io::Result<()> {
 
     // calculate the character-cell dimensions of the video area.
     let video_aspect = m.video_metadata.width as f64 / m.video_metadata.height as f64;
-    let (char_w, char_h) = calculate_render_size(
+    let (render_w, render_h) = calculate_render_size(
         m.terminal_cols,
         m.terminal_rows,
         video_aspect,
         &m.video_metadata,
         DisplayMode::LowResBlock, // LowResBlock because character-cell
     );
+    let char_w = render_w as u16;
+    let char_h = (render_h / 2) as u16;
 
     // use these dimensions to set the layout for BOTH modes.
-    img_width_chars = char_w as u16;
+    img_width_chars = char_w;
     x_offset = m.terminal_cols.saturating_sub(img_width_chars) / 2;
-    ui_start_row = char_h as u16;
+    ui_start_row = char_h;
 
     if let Some(img) = &m.current_frame {
         #[cfg(feature = "viuer")]
@@ -295,21 +297,28 @@ pub fn view(m: &mut Model, out: &mut impl Write) -> std::io::Result<()> {
         "Low-Res (Block)"
     };
 
+    let vol_str = format!("{:.0}%", m.audio_player.volume * 100.0);
+    let exp_vol_str = format!("{:.0}%", m.audio_player.export_volume * 100.0);
+
     let segment_info = match m.hovered_item.mode {
         HoverMode::Segments => format!(
-            "Segment {} of {} [{}] | Output: {} | Display: {}",
+            "Segment {} of {} [{}] | Output: {} | Display: {} | Vol: {} | Export Vol: {}",
             m.hovered_item.position + 1,
             ns,
             status_str,
             output_mode,
             res_mode,
+            vol_str,
+            exp_vol_str,
         ),
         HoverMode::Markers => format!(
-            "Marker {} of {} | Output: {} | Display: {}",
+            "Marker {} of {} | Output: {} | Display: {} | Vol: {} | Export Vol: {}",
             m.hovered_item.position + 1,
             nm,
             output_mode,
             res_mode,
+            vol_str,
+            exp_vol_str,
         ),
     };
 
@@ -335,6 +344,8 @@ pub fn view(m: &mut Model, out: &mut impl Write) -> std::io::Result<()> {
             "v mark/unmark",
             "t toggle segment",
             "i toggle output",
+            "+/- vol",
+            "a/A export vol",
             "s save/output",
         ];
 

@@ -18,6 +18,7 @@ I had a bunch of NVIDIA shadowplay clips sitting around and needed a quicker way
 - **Two Display Modes**:
   - **Low-Res**: Fast, block-based rendering that works in most terminals.
   - **High-Res**: Pixel-based rendering using Kitty or iTerm graphics protocols (if supported).
+- **Audio Preview & Volume Control**: Real-time audio playback through default output device using `rodio` and `ffmpeg`. Adjust editor playback volume (`+`/`-`) and export volume (`a`/`A`) independently.
 - **Segment-Based Editing**:
   - Place markers (`v`) to define segments.
   - Toggle segments (`t`) for inclusion or exclusion in the final export.
@@ -32,7 +33,6 @@ I had a bunch of NVIDIA shadowplay clips sitting around and needed a quicker way
 > - It has **only been tested on Linux**.
 > - It may **not build or run** on other platforms.
 > - Terminal support for high-resolution playback (Kitty/iTerm) has not been tested by me, but I have heard that it works. Low-res mode is the default.
-> - It does **not** process or preview audio. The final export (using `-c copy`) will preserve the original audio tracks.
 
 ## Requirements
 
@@ -90,6 +90,7 @@ Based on the `--help` menu:
 | `Space` | Play / Pause                 |
 | `.`     | Next frame (when paused)     |
 | `,`     | Previous frame (when paused) |
+| `+` / `-` | Increase / Decrease in-editor playback volume |
 
 ### Seeking
 
@@ -108,6 +109,7 @@ Based on the `--help` menu:
 | `t` | Toggle the current segment (between markers) as "Included" or "Excluded". |
 | `[` | Jump to the previous marker.                                              |
 | `]` | Jump to the next marker.                                                  |
+| `a` / `A` | Increase / Decrease export audio volume                                   |
 
 ### Application
 
@@ -123,8 +125,8 @@ Based on the `--help` menu:
 
 I plan to develop this more as I get more time for it.
 
-- [ ] Add basic audio preview support.
-- [ ] Add basic audio editing support.
+- [x] Add basic audio preview support.
+- [x] Add basic audio volume editing/control support.
 - [ ] Add multi-file importing.
 - [ ] More advanced editing features (e.g., re-ordering segments, changing playback speed).
 
@@ -136,10 +138,17 @@ RVE is designed to be as non-blocking and fast as possible when dealing with vid
 graph TD
     A[Main Event Loop] -->|Polls Events| B(Update State)
     B -->|Fetch Frame| C[Frame Iterator]
+    B -->|Audio Sync/Vol| L[Audio Player]
 
     subgraph Video Decoding
         C -->|Reads Pipe| D(BufReader)
         D ---|Stdout| E[ffmpeg -f rawvideo]
+    end
+
+    subgraph Audio Playback
+        L -->|Manages| M(Audio Thread)
+        M -->|Reads Pipe| N[ffmpeg -f s16le]
+        M -->|Plays PCM| O[rodio Sink]
     end
 
     A -->|Renders UI| F(Terminal View)
@@ -177,6 +186,18 @@ RVE uses [Criterion.rs](https://bheisler.github.io/criterion.rs/book/index.html)
 | `renderers`      | `differential_10_percent`  | ~108.13 µs | -          | 10% frame change                 |
 | `renderers`      | `differential_100_percent` | ~690.87 µs | -          | 100% frame change (full redraw)  |
 | `renderers`      | `viuer_renderer`           | ~692.38 µs | -          | Legacy renderer (see note below) |
+
+### Reference Results (i9-13900K + RTX 3080)
+
+| Benchmark        | Test                       | Time (avg) | Throughput  | Notes                            |
+| :--------------- | :------------------------- | :--------- | :---------- | :------------------------------- |
+| `segment_export` | `sequential`               | ~191.23 ms | -           | 4 segments of 5 seconds each     |
+| `segment_export` | `parallel`                 | ~52.84 ms  | -           | ~3.62x speedup over sequential   |
+| `frame_decode`   | `take_frame_lowres`        | ~7.85 ms   | ~127.40 fps | `rawvideo` pipe decode overhead  |
+| `renderers`      | `differential_0_percent`   | ~20.64 µs  | -           | 0% frame change (static scene)   |
+| `renderers`      | `differential_10_percent`  | ~59.12 µs  | -           | 10% frame change                 |
+| `renderers`      | `differential_100_percent` | ~391.15 µs | -           | 100% frame change (full redraw)  |
+| `renderers`      | `viuer_renderer`           | ~401.07 µs | -           | Legacy renderer (see note below) |
 
 _Note on `viuer_renderer`: The benchmark uses `gag` to intercept and suppress terminal stdout. In the real application, `viuer` redraws the entire frame and writes ~140KB of ANSI strings to the terminal every frame, causing massive terminal emulator lag. The differential renderer's true speedup comes from avoiding this I/O bottleneck._
 

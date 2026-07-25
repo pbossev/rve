@@ -31,6 +31,7 @@ pub fn update(m: &mut Model, evt: Event) -> Result<bool, String> {
                 m.exit_prompt = true;
                 m.needs_to_clear = true;
                 m.paused = true;
+                m.audio_player.pause();
                 return Ok(true);
             }
 
@@ -42,9 +43,24 @@ pub fn update(m: &mut Model, evt: Event) -> Result<bool, String> {
             match k.code {
                 KeyCode::Char(' ') => {
                     m.paused = !m.paused;
-                    if !m.paused {
+                    if m.paused {
+                        m.audio_player.pause();
+                    } else {
                         m.hovered_item.mode = HoverMode::Segments;
+                        m.audio_player.play();
                     }
+                }
+                KeyCode::Char('+') | KeyCode::Char('=') => {
+                    m.audio_player.set_volume(m.audio_player.volume + 0.1);
+                }
+                KeyCode::Char('-') | KeyCode::Char('_') => {
+                    m.audio_player.set_volume(m.audio_player.volume - 0.1);
+                }
+                KeyCode::Char('a') => {
+                    m.audio_player.set_export_volume(m.audio_player.export_volume + 0.1);
+                }
+                KeyCode::Char('A') => {
+                    m.audio_player.set_export_volume(m.audio_player.export_volume - 0.1);
                 }
                 KeyCode::Char('?') => {
                     m.hide_controls = !m.hide_controls;
@@ -124,10 +140,7 @@ pub fn update(m: &mut Model, evt: Event) -> Result<bool, String> {
                 calculate_render_size(c, r, video_aspect, &m.video_metadata, m.display_mode);
             m.frame_iterator.resize(w, h);
             let ts = m.frame_number as f64 / m.video_metadata.fps;
-            m.current_frame = m.frame_iterator.goto(ts).ok();
-
-            m.prev_instant = std::time::Instant::now();
-            m.accumulated_time = 0.0;
+            m.seek_to(ts);
             redraw_needed = true;
         }
         _ => redraw_needed = false,
@@ -217,10 +230,7 @@ fn seek_by_seconds(m: &mut Model, seconds: f64) {
 
     // go to the new timestamp
     let ts = m.frame_number as f64 / m.video_metadata.fps;
-    m.current_frame = m.frame_iterator.goto(ts).ok();
-
-    m.prev_instant = std::time::Instant::now();
-    m.accumulated_time = 0.0;
+    m.seek_to(ts);
 
     // update segment hover state
     if frames_to_seek > 0 {
@@ -235,13 +245,9 @@ fn nav_marker_prev(m: &mut Model) {
     // if at first segment (before first marker), and we navigate back, go to frame 0.
     if m.hovered_item.position == 0 {
         m.frame_number = 0;
-        let ts = 0.0;
-        m.current_frame = m.frame_iterator.goto(ts).ok();
-
-        m.prev_instant = std::time::Instant::now();
-        m.accumulated_time = 0.0;
-
         m.paused = true;
+        m.seek_to(0.0);
+
         m.hovered_item = Hovering {
             mode: HoverMode::Segments,
             position: 0,
@@ -258,12 +264,8 @@ fn nav_marker_prev(m: &mut Model) {
     };
     let ts = m.markers[pos];
     m.frame_number = (ts * m.video_metadata.fps) as u32;
-    m.current_frame = m.frame_iterator.goto(ts).ok();
-
-    m.prev_instant = std::time::Instant::now();
-    m.accumulated_time = 0.0;
-
     m.paused = true;
+    m.seek_to(ts);
 }
 
 fn nav_marker_next(m: &mut Model) {
@@ -280,12 +282,9 @@ fn nav_marker_next(m: &mut Model) {
         // if in the last segment, jump to end.
         let ts = m.video_metadata.duration_secs;
         m.frame_number = (ts * m.video_metadata.fps) as u32;
-        m.current_frame = m.frame_iterator.goto(ts).ok();
-
-        m.prev_instant = std::time::Instant::now();
-        m.accumulated_time = 0.0;
-
         m.paused = true;
+        m.seek_to(ts);
+
         m.hovered_item.position = num_markers;
         m.hovered_item.mode = HoverMode::Segments;
         return;
@@ -297,12 +296,8 @@ fn nav_marker_next(m: &mut Model) {
     };
     let ts = m.markers[target_index];
     m.frame_number = (ts * m.video_metadata.fps) as u32;
-    m.current_frame = m.frame_iterator.goto(ts).ok();
-
-    m.prev_instant = std::time::Instant::now();
-    m.accumulated_time = 0.0;
-
     m.paused = true;
+    m.seek_to(ts);
 }
 
 /// Key 'v' to toggle marker: create or delete.
@@ -369,10 +364,7 @@ fn advance(m: &mut Model, direction: i32) {
     } else if direction < 0 {
         m.frame_number = m.frame_number.saturating_sub(1);
         let ts = m.frame_number as f64 / m.video_metadata.fps;
-        m.current_frame = m.frame_iterator.goto(ts).ok();
-
-        m.prev_instant = std::time::Instant::now();
-        m.accumulated_time = 0.0;
+        m.seek_to(ts);
 
         update_segment_back(m);
         m.hovered_item.mode = HoverMode::Segments;
@@ -383,10 +375,7 @@ fn skip_to(m: &mut Model, pct: u32) {
     let ts = m.video_metadata.duration_secs * pct as f64 / 100.0;
     let old = m.frame_number;
     m.frame_number = (ts * m.video_metadata.fps) as u32;
-    m.current_frame = m.frame_iterator.goto(ts).ok();
-
-    m.prev_instant = std::time::Instant::now();
-    m.accumulated_time = 0.0;
+    m.seek_to(ts);
 
     if m.frame_number > old {
         update_segment_fwd(m);
