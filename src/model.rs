@@ -1,4 +1,5 @@
 use crate::{
+    audio::AudioPlayer,
     ffmpeg::{self, FrameIterator},
     view,
 };
@@ -37,6 +38,7 @@ pub struct Model {
     pub terminal_rows: u16,
     pub video_metadata: VideoMetadata,
     pub frame_iterator: FrameIterator,
+    pub audio_player: AudioPlayer,
     pub current_frame: Option<image::RgbImage>,
     pub frame_number: u32,
     pub prev_frame_number: u32,
@@ -87,6 +89,8 @@ impl Model {
         );
 
         let iter = FrameIterator::new(video_path, render_w, render_h)?;
+        let mut audio_player = AudioPlayer::new();
+        audio_player.seek(&iter.video_path, 0.0, true);
 
         Ok(Model {
             paused: true,
@@ -102,6 +106,7 @@ impl Model {
             terminal_rows: rows,
             video_metadata: meta,
             frame_iterator: iter,
+            audio_player,
             current_frame: None,
             hide_controls: false,
             needs_to_clear: true,
@@ -117,5 +122,12 @@ impl Model {
             should_exit: false,
             terminal_state: TerminalState::default(),
         })
+    }
+
+    pub fn seek_to(&mut self, ts: f64) {
+        self.current_frame = self.frame_iterator.goto(ts).ok();
+        self.audio_player.seek(&self.frame_iterator.video_path, ts, self.paused);
+        self.prev_instant = std::time::Instant::now();
+        self.accumulated_time = 0.0;
     }
 }

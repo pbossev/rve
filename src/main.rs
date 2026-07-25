@@ -110,6 +110,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         if model.is_saving {
+            model.audio_player.pause();
             model.is_saving = false;
             execute!(
                 stdout,
@@ -140,6 +141,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         if model.should_exit {
+            model.audio_player.pause();
             break;
         }
     }

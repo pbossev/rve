@@ -29,6 +29,7 @@ impl FrameIterator {
             .args(["-f", "rawvideo"])
             .args(["-vf", &format!("scale={}:{}", width, height)]) // scale to required size
             .args(["pipe:"])
+            .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
             .spawn()?;
@@ -222,14 +223,24 @@ pub fn process_final_output(model: &Model) -> Result<(), Box<dyn Error>> {
             let path_clone = model.frame_iterator.video_path.clone();
             let start_clone = *start;
             let end_clone = *end;
+            let export_vol = model.audio_player.export_volume;
+            // build actual ffmpeg command
             handles.push(std::thread::spawn(move || {
                 let mut cmd = std::process::Command::new("ffmpeg");
-                cmd.args(["-ss", &format!("{}", start_clone)])
+                cmd.stdin(std::process::Stdio::null())
+                    .args(["-ss", &format!("{}", start_clone)])
                     .args(["-i", &path_clone])
-                    .args(["-to", &format!("{}", end_clone)])
-                    .args(["-c", "copy"]) // copy for speed and quality
-                    .args(["-y"]) // overwrite temp files
-                    .arg(&temp_segment_path);
+                    .args(["-to", &format!("{}", end_clone)]);
+
+                if (export_vol - 1.0).abs() < 0.001 {
+                    cmd.args(["-c", "copy"]);
+                } else {
+                    cmd.args(["-c:v", "copy"])
+                        .args(["-c:a", "aac"])
+                        .args(["-af", &format!("volume={:.2}", export_vol)]);
+                }
+
+                cmd.args(["-y"]).arg(&temp_segment_path);
 
                 println!("Running command: {:?}", cmd);
                 cmd.output()
@@ -268,7 +279,8 @@ pub fn process_final_output(model: &Model) -> Result<(), Box<dyn Error>> {
         );
 
         let mut cmd = std::process::Command::new("ffmpeg");
-        cmd.args(["-f", "concat"])
+        cmd.stdin(std::process::Stdio::null())
+            .args(["-f", "concat"])
             .args(["-safe", "0"])
             .args(["-i", &temp_list_path.to_string_lossy().to_string()])
             .args(["-c", "copy"])
@@ -307,13 +319,23 @@ pub fn process_final_output(model: &Model) -> Result<(), Box<dyn Error>> {
             );
 
             let path_clone = model.frame_iterator.video_path.clone();
+            let export_vol = model.audio_player.export_volume;
             handles.push(std::thread::spawn(move || {
                 let mut cmd = std::process::Command::new("ffmpeg");
-                cmd.args(["-ss", &format!("{}", start)])
+                cmd.stdin(std::process::Stdio::null())
+                    .args(["-ss", &format!("{}", start)])
                     .args(["-i", &path_clone])
-                    .args(["-to", &format!("{}", end)])
-                    .args(["-c", "copy"])
-                    .arg(&output_filename);
+                    .args(["-to", &format!("{}", end)]);
+
+                if (export_vol - 1.0).abs() < 0.001 {
+                    cmd.args(["-c", "copy"]);
+                } else {
+                    cmd.args(["-c:v", "copy"])
+                        .args(["-c:a", "aac"])
+                        .args(["-af", &format!("volume={:.2}", export_vol)]);
+                }
+
+                cmd.arg(&output_filename);
 
                 println!("Running command: {:?}", cmd);
                 cmd.output()
