@@ -105,6 +105,7 @@ Based on the `--help` menu:
 | `Space` | Play / Pause                 |
 | `.`     | Next frame (when paused)     |
 | `,`     | Previous frame (when paused) |
+| `<` / `>` | Decrease / Increase playback speed (0.25x - 2.0x) |
 | `+` / `-` | Increase / Decrease in-editor playback volume |
 
 ### Seeking

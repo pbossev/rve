@@ -15,6 +15,8 @@ pub struct AudioPlayer {
     pub volume: f32,
     /// Export volume multiplier (0.0 to 2.0).
     pub export_volume: f32,
+    /// Playback speed multiplier (0.25 to 4.0).
+    pub speed: f32,
 }
 
 impl AudioPlayer {
@@ -35,6 +37,7 @@ impl AudioPlayer {
             epoch: Arc::new(AtomicU64::new(0)),
             volume: 1.0,
             export_volume: 1.0,
+            speed: 1.0,
         }
     }
 
@@ -43,6 +46,14 @@ impl AudioPlayer {
         self.volume = vol.clamp(0.0, 2.0);
         if let Some(sink) = &self.sink {
             sink.set_volume(self.volume);
+        }
+    }
+
+    /// Sets the preview playback speed multiplier.
+    pub fn set_speed(&mut self, speed: f32) {
+        self.speed = speed.clamp(0.25, 4.0);
+        if let Some(sink) = &self.sink {
+            sink.set_speed(self.speed);
         }
     }
 

@@ -104,6 +104,8 @@ pub struct Model {
     pub should_exit: bool,
     /// Terminal differential buffer cache.
     pub terminal_state: TerminalState,
+    /// Playback speed multiplier (e.g. 0.5, 1.0, 2.0).
+    pub speed: f64,
 }
 
 /// Basic metadata properties of the input video file.
@@ -173,6 +175,7 @@ impl Model {
             is_saving: false,
             should_exit: false,
             terminal_state: TerminalState::default(),
+            speed: 1.0,
         })
     }
 

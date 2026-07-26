@@ -59,6 +59,14 @@ pub fn update(m: &mut Model, evt: Event) -> Result<bool, String> {
                 KeyCode::Char('-') | KeyCode::Char('_') => {
                     m.audio_player.set_volume(m.audio_player.volume - 0.1);
                 }
+                KeyCode::Char('<') | KeyCode::Char(',') if k.modifiers.contains(KeyModifiers::SHIFT) => {
+                    adjust_speed(m, false);
+                }
+                KeyCode::Char('>') | KeyCode::Char('.') if k.modifiers.contains(KeyModifiers::SHIFT) => {
+                    adjust_speed(m, true);
+                }
+                KeyCode::Char('<') => adjust_speed(m, false),
+                KeyCode::Char('>') => adjust_speed(m, true),
                 KeyCode::Char('a') => {
                     m.audio_player.set_export_volume(m.audio_player.export_volume + 0.1);
                 }
@@ -185,18 +193,37 @@ pub fn update(m: &mut Model, evt: Event) -> Result<bool, String> {
     Ok(redraw_needed)
 }
 
-/// Calculates frame advancement count based on real time elapsed and frame rate drift.
+/// Calculates frame advancement count based on real time elapsed, speed scaling, and frame rate drift.
 fn calc_frames(m: &mut Model) -> u32 {
     let dt = (std::time::Instant::now() - m.prev_instant).as_secs_f64();
-    let mut n = (dt * m.video_metadata.fps).floor() as u32;
+    let effective_fps = m.video_metadata.fps * m.speed;
+    let effective_spf = m.video_metadata.seconds_per_frame / m.speed;
+    let mut n = (dt * effective_fps).floor() as u32;
     // account for frame-rate drift by tracking error
-    let err = dt - (n as f64 * m.video_metadata.seconds_per_frame);
+    let err = dt - (n as f64 * effective_spf);
     m.accumulated_time += err;
-    if m.accumulated_time > m.video_metadata.seconds_per_frame {
+    if m.accumulated_time > effective_spf {
         n += 1;
-        m.accumulated_time -= m.video_metadata.seconds_per_frame;
+        m.accumulated_time -= effective_spf;
     }
     n
+}
+
+/// Cycles playback speed up or down through standard speed presets.
+fn adjust_speed(m: &mut Model, increase: bool) {
+    let speeds = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+    let current_speed = m.speed;
+    let idx = speeds
+        .iter()
+        .position(|&s| (s - current_speed).abs() < 0.01)
+        .unwrap_or(3);
+    let new_idx = if increase {
+        (idx + 1).min(speeds.len() - 1)
+    } else {
+        idx.saturating_sub(1)
+    };
+    m.speed = speeds[new_idx];
+    m.audio_player.set_speed(m.speed as f32);
 }
 
 /// Advances timeline segment hover position forward as playhead moves.

@@ -279,22 +279,25 @@ pub fn view(m: &mut Model, out: &mut impl Write) -> std::io::Result<()> {
 
     let vol_str = format!("{:.0}%", m.audio_player.volume * 100.0);
     let exp_vol_str = format!("{:.0}%", m.audio_player.export_volume * 100.0);
+    let speed_str = format!("{:.2}x", m.speed);
 
     let segment_info = match m.hovered_item.mode {
         HoverMode::Segments => format!(
-            "Segment {} of {} [{}] | Output: {} | Display: {} | Vol: {} | Export Vol: {}",
+            "Segment {} of {} [{}] | Speed: {} | Output: {} | Display: {} | Vol: {} | Export Vol: {}",
             m.hovered_item.position + 1,
             ns,
             status_str,
+            speed_str,
             output_mode,
             res_mode,
             vol_str,
             exp_vol_str,
         ),
         HoverMode::Markers => format!(
-            "Marker {} of {} | Output: {} | Display: {} | Vol: {} | Export Vol: {}",
+            "Marker {} of {} | Speed: {} | Output: {} | Display: {} | Vol: {} | Export Vol: {}",
             m.hovered_item.position + 1,
             nm,
+            speed_str,
             output_mode,
             res_mode,
             vol_str,
@@ -326,6 +329,7 @@ pub fn view(m: &mut Model, out: &mut impl Write) -> std::io::Result<()> {
             "i toggle output",
             "+/- vol",
             "a/A export vol",
+            "</> speed",
             "s save/output",
         ];
 
