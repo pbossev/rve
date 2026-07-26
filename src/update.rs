@@ -1,7 +1,10 @@
+//! Event handling and application state update logic.
+
 use crate::model::{DisplayMode, HoverMode, Hovering, Model, NUM_FRAMES_TO_TRACK_FPS};
 use crate::view::calculate_render_size;
 use crossterm::event::{Event, KeyCode, KeyModifiers};
 
+/// Processes keyboard and terminal resize events to update application state.
 pub fn update(m: &mut Model, evt: Event) -> Result<bool, String> {
     m.prev_frame_number = m.frame_number;
     let mut redraw_needed = false;
@@ -182,6 +185,7 @@ pub fn update(m: &mut Model, evt: Event) -> Result<bool, String> {
     Ok(redraw_needed)
 }
 
+/// Calculates frame advancement count based on real time elapsed and frame rate drift.
 fn calc_frames(m: &mut Model) -> u32 {
     let dt = (std::time::Instant::now() - m.prev_instant).as_secs_f64();
     let mut n = (dt * m.video_metadata.fps).floor() as u32;
@@ -195,6 +199,7 @@ fn calc_frames(m: &mut Model) -> u32 {
     n
 }
 
+/// Advances timeline segment hover position forward as playhead moves.
 fn update_segment_fwd(m: &mut Model) {
     let ts = m.frame_number as f64 * m.video_metadata.seconds_per_frame;
     while let Some(marker_ts) = m.markers.get(m.hovered_item.position) {
@@ -206,6 +211,7 @@ fn update_segment_fwd(m: &mut Model) {
     }
 }
 
+/// Rewinds timeline segment hover position backward as playhead seeks back.
 fn update_segment_back(m: &mut Model) {
     let ts = m.frame_number as f64 * m.video_metadata.seconds_per_frame;
     while m.hovered_item.position > 0 {
@@ -219,6 +225,7 @@ fn update_segment_back(m: &mut Model) {
     }
 }
 
+/// Seeks playhead by a relative duration in seconds.
 fn seek_by_seconds(m: &mut Model, seconds: f64) {
     let max_frame = (m.video_metadata.duration_secs * m.video_metadata.fps).round() as u32;
     let frames_to_seek = (seconds * m.video_metadata.fps).round() as i32;
@@ -240,6 +247,7 @@ fn seek_by_seconds(m: &mut Model, seconds: f64) {
     m.hovered_item.mode = HoverMode::Segments;
 }
 
+/// Navigates playhead to the previous timeline marker or video start.
 fn nav_marker_prev(m: &mut Model) {
     // if at first segment (before first marker), and we navigate back, go to frame 0.
     if m.hovered_item.position == 0 {
@@ -267,6 +275,7 @@ fn nav_marker_prev(m: &mut Model) {
     m.seek_to(ts);
 }
 
+/// Navigates playhead to the next timeline marker or video end.
 fn nav_marker_next(m: &mut Model) {
     let num_markers = m.markers.len();
     let current_pos = m.hovered_item.position;
@@ -299,7 +308,7 @@ fn nav_marker_next(m: &mut Model) {
     m.seek_to(ts);
 }
 
-/// Key 'v' to toggle marker: create or delete.
+/// Toggles split marker at current frame (creates marker or deletes existing near marker).
 fn toggle_marker(m: &mut Model) {
     let ts = m.frame_number as f64 / m.video_metadata.fps;
     // tolerance for marker proximity: half a frame duration
@@ -338,7 +347,7 @@ fn toggle_marker(m: &mut Model) {
     m.needs_to_clear = true; // redraw timeline bar
 }
 
-/// Key 't' to toggle segment inclusion status
+/// Toggles inclusion/exclusion status of the currently hovered segment.
 fn toggle_segment(m: &mut Model) {
     m.hovered_item.mode = HoverMode::Segments; // force segment mode for clarity
 
@@ -349,7 +358,7 @@ fn toggle_segment(m: &mut Model) {
     }
 }
 
-/// Moves forward or backward by a single frame.
+/// Advances or rewinds video playback by a single frame.
 fn advance(m: &mut Model, direction: i32) {
     let max_frame = (m.video_metadata.duration_secs * m.video_metadata.fps).round() as u32;
 
@@ -370,6 +379,7 @@ fn advance(m: &mut Model, direction: i32) {
     }
 }
 
+/// Seeks playhead to a percentage of total video duration.
 fn skip_to(m: &mut Model, pct: u32) {
     let ts = m.video_metadata.duration_secs * pct as f64 / 100.0;
     let old = m.frame_number;

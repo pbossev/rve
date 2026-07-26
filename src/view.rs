@@ -1,3 +1,5 @@
+//! Terminal UI rendering and canvas display routines.
+
 use crate::model::{
     DisplayMode, HoverMode, MAX_HR_WIDTH, Model, TIMELINE_ROW, UI_HEIGHT, VideoMetadata,
 };
@@ -9,11 +11,12 @@ use crossterm::{
 };
 use std::io::Write;
 
+/// Formats duration in seconds as `minutes:seconds` (e.g. `1:05`).
 fn fmt_time(s: f64) -> String {
     format!("{}:{:02}", (s / 60.0) as u32, (s % 60.0) as u32)
 }
 
-/// uhhh calculate the render size
+/// Calculates video canvas dimensions based on terminal columns, rows, aspect ratio, and display mode.
 pub fn calculate_render_size(
     term_cols: u16,
     term_rows: u16,
@@ -49,6 +52,7 @@ pub fn calculate_render_size(
     }
 }
 
+/// Renders the complete terminal user interface including frame preview, timeline bar, and controls footer.
 pub fn view(m: &mut Model, out: &mut impl Write) -> std::io::Result<()> {
     if m.needs_to_clear {
         queue!(out, terminal::Clear(terminal::ClearType::All))?;
@@ -423,6 +427,7 @@ pub fn view(m: &mut Model, out: &mut impl Write) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Renders a video frame using half-block (`▀`) character cells with differential state updates.
 pub fn render_differential(
     state: &mut crate::model::TerminalState,
     needs_to_clear: bool,
@@ -515,6 +520,7 @@ pub fn render_differential(
     Ok(())
 }
 
+/// Encodes raw byte slice into a Base64 string.
 fn base64_encode(data: &[u8]) -> String {
     const B64_CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
@@ -539,6 +545,7 @@ fn base64_encode(data: &[u8]) -> String {
     out
 }
 
+/// Renders a video frame using the Kitty graphics protocol.
 pub fn render_kitty(
     img: &image::RgbImage,
     x_offset: u16,
@@ -580,3 +587,4 @@ pub fn render_kitty(
     out.flush()?;
     Ok(())
 }
+

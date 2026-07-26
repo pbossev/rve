@@ -1,3 +1,5 @@
+//! FFmpeg and FFprobe process execution routines for video metadata, frame streaming, and rendering export.
+
 use crate::model::{Model, VideoMetadata};
 use std::error::Error;
 use std::io::{BufReader, Read};
@@ -5,17 +7,22 @@ use std::path::{Path, PathBuf};
 
 const NUM_COLOR_CHANNELS: i32 = 3;
 
+/// Stream iterator decoding RGB24 video frames on demand from an FFmpeg process pipe.
 pub struct FrameIterator {
+    /// Path to the video file.
     pub video_path: String,
     render_width: i32,
     render_height: i32,
     stdout: BufReader<std::process::ChildStdout>,
     pixel_buffer: Vec<u8>,
+    /// Counter tracking rendered frame count.
     pub num_frames_rendered: u32,
+    /// Timestamp in seconds of the last decoded frame.
     pub last_timestamp_secs: f64,
 }
 
 impl FrameIterator {
+    /// Spawns an FFmpeg child process outputting raw RGB24 frames starting at `start` seconds.
     pub fn create_process(
         path: &str,
         start: f64,
@@ -37,6 +44,7 @@ impl FrameIterator {
         proc.stdout.take().ok_or("failed to get stdout".into())
     }
 
+    /// Creates a new `FrameIterator` scaling frames to `(w, h)`.
     pub fn new(path: String, w: i32, h: i32) -> Result<Self, Box<dyn Error>> {
         let raw_stdout = Self::create_process(&path, 0.0, w, h)?;
         let stdout =
@@ -52,6 +60,7 @@ impl FrameIterator {
         })
     }
 
+    /// Resizes the output frame dimensions and restarts frame decoding at the current timestamp.
     pub fn resize(&mut self, w: i32, h: i32) {
         self.render_width = w;
         self.render_height = h;
@@ -60,6 +69,7 @@ impl FrameIterator {
         let _ = self.goto(ts);
     }
 
+    /// Reads the next raw RGB24 frame from stdout.
     pub fn take_frame(&mut self) -> Result<image::RgbImage, Box<dyn Error>> {
         self.stdout.read_exact(&mut self.pixel_buffer)?;
         self.num_frames_rendered += 1;
@@ -72,6 +82,7 @@ impl FrameIterator {
             .ok_or("failed to create image".into())
     }
 
+    /// Skips `n - 1` frames and returns the `n`-th frame.
     pub fn skip_frames(&mut self, n: u32) -> Result<image::RgbImage, Box<dyn Error>> {
         for _ in 0..n.saturating_sub(1) {
             let result = self.stdout.read_exact(&mut self.pixel_buffer);
@@ -82,6 +93,7 @@ impl FrameIterator {
         self.take_frame()
     }
 
+    /// Seeks the video pipe to timestamp `ts` and returns the frame at that position.
     pub fn goto(&mut self, ts: f64) -> Result<image::RgbImage, Box<dyn Error>> {
         let raw_stdout =
             Self::create_process(&self.video_path, ts, self.render_width, self.render_height)?;
@@ -95,6 +107,7 @@ impl FrameIterator {
     }
 }
 
+/// Executes `ffprobe` to extract resolution, FPS, and duration metadata from a video file.
 pub fn get_ffprobe_video_metadata(video_filepath: &str) -> Result<VideoMetadata, Box<dyn Error>> {
     let probe_process = std::process::Command::new("ffprobe")
         .args(["-v", "error", "-select_streams", "v:0"])
@@ -136,6 +149,7 @@ pub fn get_ffprobe_video_metadata(video_filepath: &str) -> Result<VideoMetadata,
     })
 }
 
+/// Renders included video segments to single or multi-file output assets using FFmpeg.
 pub fn process_final_output(model: &Model) -> Result<(), Box<dyn Error>> {
     // no output if no markers AND the first segment is NOT included.
     if model.markers.is_empty() && model.segments_included.get(0).copied().unwrap_or(true) == false

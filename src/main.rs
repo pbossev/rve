@@ -1,3 +1,5 @@
+//! Application entry point and main event loop runner for `rve`.
+
 use crossterm::{
     event::{Event, KeyCode, KeyEvent, KeyModifiers, poll, read},
     execute, terminal,
@@ -10,6 +12,7 @@ use std::io::stdout;
 use std::time::Duration;
 use std::{error::Error, io::Write};
 
+/// Detects terminal support for high-resolution graphics protocols (e.g., Kitty, WezTerm, Ghostty).
 fn detect_high_res_support() -> bool {
     let env_contains = |var: &str, terms: &[&str]| {
         std::env::var(var).map_or(false, |val| {
@@ -26,6 +29,7 @@ fn detect_high_res_support() -> bool {
         || std::env::var_os("GHOSTTY_RESOURCES_DIR").is_some()
 }
 
+/// Parses command-line flags and initializes the `Model`.
 fn init() -> Result<Model, String> {
     let (cols, rows) = terminal::size().map_err(|e| format!("terminal size: {}", e))?;
     let mut high_res_available = detect_high_res_support();
@@ -63,6 +67,7 @@ fn init() -> Result<Model, String> {
     .map_err(|e| e.to_string())
 }
 
+/// Initializes terminal raw mode and enters the main event render loop.
 fn main() -> Result<(), Box<dyn Error>> {
     let mut model = match init() {
         Ok(m) => m,
