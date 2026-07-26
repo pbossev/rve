@@ -10,13 +10,25 @@ use std::io::stdout;
 use std::time::Duration;
 use std::{error::Error, io::Write};
 
+fn detect_high_res_support() -> bool {
+    let env_contains = |var: &str, terms: &[&str]| {
+        std::env::var(var).map_or(false, |val| {
+            let lower = val.to_lowercase();
+            terms.iter().any(|t| lower.contains(t))
+        })
+    };
+
+    env_contains("TERM", &["kitty", "wezterm", "ghostty", "konsole"])
+        || env_contains("TERM_PROGRAM", &["kitty", "wezterm", "ghostty", "iterm", "konsole"])
+        || env_contains("LC_TERMINAL", &["kitty", "iterm"])
+        || std::env::var_os("KITTY_WINDOW_ID").is_some()
+        || std::env::var_os("WEZTERM_PANE").is_some()
+        || std::env::var_os("GHOSTTY_RESOURCES_DIR").is_some()
+}
+
 fn init() -> Result<Model, String> {
     let (cols, rows) = terminal::size().map_err(|e| format!("terminal size: {}", e))?;
-    #[cfg(feature = "viuer")]
-    let high_res_available =
-        (viuer::get_kitty_support() != viuer::KittySupport::None) | viuer::is_iterm_supported();
-    #[cfg(not(feature = "viuer"))]
-    let high_res_available = false;
+    let mut high_res_available = detect_high_res_support();
 
     let args: Vec<_> = std::env::args().collect();
     let mut single_output = false;
@@ -31,11 +43,8 @@ fn init() -> Result<Model, String> {
             }
             "--single-output" | "-s" => single_output = true,
             "--high-res" | "-r" => {
-                if high_res_available {
-                    initial_mode = DisplayMode::HighResPixel;
-                } else {
-                    eprintln!("Warning: High-res mode not supported, falling back to low-res.");
-                }
+                high_res_available = true;
+                initial_mode = DisplayMode::HighResPixel;
             }
             _ if !arg.starts_with('-') => video_path = Some(arg.clone()),
             _ => {}

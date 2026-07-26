@@ -55,32 +55,65 @@
 #   Hide                            Hide the subsequent commands from the output
 #   Show                            Show the subsequent commands in the output
 
-# RVE Demo VHS Tape
-Output demo.gif
-Output demo.webm
+Output demo/out/demo.gif
+Output demo/out/demo.webm
 Set Theme "Dark+"
 Set FontSize 12
 Set Width 1200
 Set Height 600
+Set Framerate 20
+Set PlaybackSpeed 1.0
 
-# 1. Run RVE with a video file
-Type "rve test_video.mp4"
+Type "./rve demo/test_video.mp4"
 Enter
 
-Sleep 300ms
-Type "4"
-Sleep 100ms
+Sleep 1s
+Screenshot demo/out/screenshot_1.png
+
+# Play video for 1.5 seconds, then pause
+Type " "
+Sleep 1.5s
+Screenshot demo/out/screenshot_2.png
+Sleep 1s
+Screenshot demo/out/screenshot_3.png
+
+# Jump to 30% and place a marker
+Sleep 500ms
+Type "3"
+Sleep 500ms
+Screenshot demo/out/screenshot_4.png
 Type "v"
-Sleep 100ms
-Type "6"
-Sleep 100ms
+Sleep 500ms
+Screenshot demo/out/screenshot_5.png
+
+# Jump to 70% and place a marker
+Sleep 500ms
+Type "7"
+Sleep 500ms
+Screenshot demo/out/screenshot_6.png
 Type "v"
-Sleep 100ms
-Type "5"
-Sleep 100ms
+Sleep 500ms
+Screenshot demo/out/screenshot_7.png
+
+# Jump to previous marker and toggle segment inclusion
+Sleep 500ms
+Type "["
+Sleep 500ms
+Screenshot demo/out/screenshot_8.png
 Type "t"
-Sleep 100ms
+Sleep 500ms
+Screenshot demo/out/screenshot_9.png
+Sleep 1s
 
-Screenshot screenshot.png
+# Save output
+Type "s"
+Sleep 1.5s
+Screenshot demo/out/screenshot_10.png
+Enter
+Sleep 500ms
 
-Type "!"
+# Quit rve
+Type "q"
+Sleep 500ms
+Type "y"
+Sleep 1s

@@ -1,2 +1,3 @@
 /target
-test_video_*.mp4
+**/test_video*.mp4
+demo/out/

@@ -98,21 +98,10 @@ fn bench_renderers(c: &mut Criterion) {
         });
     });
 
-    #[cfg(feature = "viuer")]
-    group.bench_function("viuer_renderer", |b| {
+    group.bench_function("kitty_renderer", |b| {
         b.iter(|| {
-            let _gag = gag::Gag::stdout().unwrap();
-            let cfg = viuer::Config {
-                x: 0,
-                y: 0,
-                width: Some(RENDER_W as u32),
-                height: Some(RENDER_H as u32),
-                absolute_offset: true,
-                use_kitty: false,
-                use_iterm: false,
-                ..Default::default()
-            };
-            viuer::print(&image::DynamicImage::ImageRgb8(img.clone()), &cfg).unwrap();
+            let mut out = sink();
+            view::render_kitty(&img, 0, 0, RENDER_W, RENDER_H, &mut out).unwrap();
         });
     });
 

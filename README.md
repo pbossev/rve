@@ -1,6 +1,6 @@
 # RVE (Rust Video Editor)
 
-A minimal, terminal-based video segment cutter written in Rust. It uses `ffmpeg` for processing and a custom differential renderer (with legacy `viuer` support) for in-terminal video playback.
+A minimal, terminal-based video segment cutter written in Rust. It uses `ffmpeg` for processing and a custom differential renderer (with native Kitty graphics protocol support) for in-terminal video playback.
 
 ![A screenshot of RVE](https://github.com/pbossev/rve/blob/main/demo/demo.png?raw=true)
 
@@ -14,7 +14,7 @@ I had a bunch of NVIDIA shadowplay clips sitting around and needed a quicker way
 
 ## Features
 
-- **In-Terminal Playback**: Uses a custom, high-performance differential ANSI renderer for default low-res playback, with legacy `viuer` support retained (includes high-res Kitty/iTerm protocols).
+- **In-Terminal Playback**: Uses a custom, high-performance differential ANSI renderer for default low-res playback, with native Kitty graphics protocol support for high-res rendering without heavy external dependencies.
 - **Two Display Modes**:
   - **Low-Res**: Fast, block-based rendering that works in most terminals.
   - **High-Res**: Pixel-based rendering using Kitty or iTerm graphics protocols (if supported).
@@ -30,9 +30,9 @@ I had a bunch of NVIDIA shadowplay clips sitting around and needed a quicker way
 
 > [!WARNING]
 >
-> - It has **only been tested on Linux**.
-> - It may **not build or run** on other platforms.
-> - Terminal support for high-resolution playback (Kitty/iTerm) has not been tested by me, but I have heard that it works. Low-res mode is the default.
+> - It has **only been tested on Linux** and is **untested on macOS** or Windows.
+> - It may **not build or run** on other operating systems without manual dependency setup (`ffmpeg`, `ffprobe`, `rodio` ALSA/CoreAudio).
+> - Terminal support for high-resolution playback (Kitty graphics) is auto-detected or enabled via `-r`/`--high-res`. Low-res mode is the default.
 
 ## Requirements
 
@@ -78,7 +78,7 @@ Based on the `--help` menu:
 
 - `<filepath>`: (Required) The path to the video file you want to edit.
 - `--single-output`, `-s`: On exit, concatenate all "included" segments into one file (e.g., `filename_concat.mp4`). If omitted, it defaults to multi-file mode.
-- `--high-res`, `-r`: Start the application in high-resolution pixel mode. This only works if your terminal (e.g., Kitty, WezTerm) supports the necessary graphics protocols, and `viuer` is selected as the renderer.
+- `--high-res`, `-r`: Start the application in high-resolution pixel mode using the native Kitty graphics protocol (supported in Kitty, WezTerm, Ghostty, etc.).
 - `--help`, `-h`: Show the help menu.
 
 ## Keybinds
@@ -120,6 +120,27 @@ Based on the `--help` menu:
 | `?`         | Toggle the on-screen keybinding help display.                                                            |
 | `s`         | **Save/output**. Suspends UI and begins the `ffmpeg` export process based on your segments.              |
 | `q` / `Esc` | **Quit**. Prompts for confirmation before exiting without saving.                                        |
+
+## Demo Recording
+
+A [VHS](https://github.com/charmbracelet/vhs) tape file is included at [`demo/demo.tape`](demo/demo.tape) to record terminal demonstrations of RVE automatically.
+
+### Running the VHS Demo
+
+To generate the animated demo GIF, WebM recording, and step-by-step screenshots:
+
+1. **Install VHS**: Ensure [`vhs`](https://github.com/charmbracelet/vhs) (and its dependencies `ffmpeg` and `ttyd`) is installed.
+2. **Build the binary**: Compile RVE with the `--release` flag, so the binary exists in the target directory.
+3. **Sample video**: Ensure `test_video.mp4` is present in the `demo/` directory.
+4. **Run VHS**:
+   ```bash
+   vhs demo/demo.tape
+   ```
+
+This executes the automated interaction defined in `demo/demo.tape` and saves the generated media into `demo/out/`:
+- `demo/out/demo.gif` – Animated GIF of the terminal session
+- `demo/out/demo.webm` – WebM video recording
+- `demo/out/screenshot_1.png` – `screenshot_10.png` – Step-by-step frame screenshots
 
 ## Roadmap
 
@@ -173,7 +194,7 @@ RVE uses [Criterion.rs](https://bheisler.github.io/criterion.rs/book/index.html)
 
 - **`frame_pipeline`**: Measures the raw throughput of pulling frames through the `BufReader` and constructing `image::RgbImage` structs. By reusing buffers, the overhead of the Rust pipeline is practically zero, bounded entirely by `ffmpeg`'s decode speed.
 - **`export`**: Compares the speed of sequential vs parallel exporting. Due to the parallel threading architecture, exporting multiple segments concurrently yields significant speedups (e.g., a ~3.3x speedup when exporting 4 segments on modern hardware) since `ffmpeg` copy operations are largely I/O and stream-parse bound.
-- **`renderer`**: Compares the custom differential terminal renderer against the legacy `viuer` renderer. The differential renderer tracks frame states and only writes ANSI escape codes for the exact pixels that change. This dramatically cuts down terminal I/O overhead, leading to massive real-world performance gains during static or low-motion scenes.
+- **`renderer`**: Compares the custom differential terminal renderer against the native `kitty_renderer`. The differential renderer tracks frame states and only writes ANSI escape codes for the exact pixels that change. This cuts down terminal I/O overhead during static or low-motion scenes.
 
 ### Reference Results (Ryzen 5 5500 + RTX 3080)
 
@@ -185,7 +206,7 @@ RVE uses [Criterion.rs](https://bheisler.github.io/criterion.rs/book/index.html)
 | `renderers`      | `differential_0_percent`   | ~33.58 µs  | -          | 0% frame change (static scene)   |
 | `renderers`      | `differential_10_percent`  | ~108.13 µs | -          | 10% frame change                 |
 | `renderers`      | `differential_100_percent` | ~690.87 µs | -          | 100% frame change (full redraw)  |
-| `renderers`      | `viuer_renderer`           | ~692.38 µs | -          | Legacy renderer (see note below) |
+| `renderers`      | `kitty_renderer`           | ~692.38 µs | -          | Native Kitty graphics renderer   |
 
 ### Reference Results (i9-13900K + RTX 3080)
 
@@ -197,9 +218,9 @@ RVE uses [Criterion.rs](https://bheisler.github.io/criterion.rs/book/index.html)
 | `renderers`      | `differential_0_percent`   | ~20.64 µs  | -           | 0% frame change (static scene)   |
 | `renderers`      | `differential_10_percent`  | ~59.12 µs  | -           | 10% frame change                 |
 | `renderers`      | `differential_100_percent` | ~391.15 µs | -           | 100% frame change (full redraw)  |
-| `renderers`      | `viuer_renderer`           | ~401.07 µs | -           | Legacy renderer (see note below) |
+| `renderers`      | `kitty_renderer`           | ~401.07 µs | -           | Native Kitty graphics renderer   |
 
-_Note on `viuer_renderer`: The benchmark uses `gag` to intercept and suppress terminal stdout. In the real application, `viuer` redraws the entire frame and writes ~140KB of ANSI strings to the terminal every frame, causing massive terminal emulator lag. The differential renderer's true speedup comes from avoiding this I/O bottleneck._
+_Note on `kitty_renderer`: The benchmark uses `gag` to intercept and suppress terminal stdout. In the real application, Kitty graphics transfers uncompressed RGB data to the terminal emulator._
 
 You can run the benchmarks yourself with:
 

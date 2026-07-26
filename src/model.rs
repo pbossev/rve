@@ -6,7 +6,7 @@ use crate::{
 use std::error::Error;
 
 pub const NUM_FRAMES_TO_TRACK_FPS: u8 = 10;
-pub const UI_HEIGHT: u16 = 7;
+pub const UI_HEIGHT: u16 = 8;
 pub const TIMELINE_ROW: u16 = 2;
 pub const MAX_HR_WIDTH: u32 = 1280;
 

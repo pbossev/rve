@@ -64,7 +64,6 @@ pub fn update(m: &mut Model, evt: Event) -> Result<bool, String> {
                 }
                 KeyCode::Char('?') => {
                     m.hide_controls = !m.hide_controls;
-                    m.needs_to_clear = true;
                 }
                 KeyCode::Char('r') => {
                     if m.high_res_available {

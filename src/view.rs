@@ -52,6 +52,7 @@ pub fn calculate_render_size(
 pub fn view(m: &mut Model, out: &mut impl Write) -> std::io::Result<()> {
     if m.needs_to_clear {
         queue!(out, terminal::Clear(terminal::ClearType::All))?;
+        let _ = write!(out, "\x1b_Ga=d,d=A\x1b\\");
     }
 
     let img_width_chars;
@@ -76,34 +77,9 @@ pub fn view(m: &mut Model, out: &mut impl Write) -> std::io::Result<()> {
     ui_start_row = char_h;
 
     if let Some(img) = &m.current_frame {
-        #[cfg(feature = "viuer")]
-        {
-            if m.display_mode == DisplayMode::HighResPixel {
-                let cfg = viuer::Config {
-                    x: x_offset,
-                    y: 0,
-                    width: Some(char_w as u32),
-                    height: Some(char_h as u32),
-                    absolute_offset: true,
-                    use_kitty: m.display_mode == DisplayMode::HighResPixel,
-                    use_iterm: m.display_mode == DisplayMode::HighResPixel,
-                    ..Default::default()
-                };
-                let _ = viuer::print(&image::DynamicImage::ImageRgb8(img.clone()), &cfg);
-            } else {
-                render_differential(
-                    &mut m.terminal_state,
-                    m.needs_to_clear,
-                    out,
-                    img,
-                    x_offset,
-                    char_w as u16,
-                    char_h as u16,
-                )?;
-            }
-        }
-        #[cfg(not(feature = "viuer"))]
-        {
+        if m.display_mode == DisplayMode::HighResPixel {
+            render_kitty(img, x_offset, 0, char_w, char_h, out)?;
+        } else {
             render_differential(
                 &mut m.terminal_state,
                 m.needs_to_clear,
@@ -357,26 +333,30 @@ pub fn view(m: &mut Model, out: &mut impl Write) -> std::io::Result<()> {
         let nav_controls = [
             if nm > 0 { "[ ] jump" } else { "" },
             "←/→ 5s",
-            "Alt ←/→ 30s",
-            "Ctrl ←/→ 1m",
-            ", . frame",
+            "Alt + ←/→ 30s",
+            "Ctrl + ←/→ 1m",
+            ",/. skip frame",
             "0-9 jump",
             "Esc/q quit",
         ];
 
-        let controls: Vec<&str> = seg_controls
+        let seg_controls_line = seg_controls.join(" • ");
+        let nav_controls_vec: Vec<&str> = nav_controls
             .iter()
             .cloned()
-            .chain(nav_controls.iter().cloned())
             .filter(|s| !s.is_empty())
             .collect();
-
-        let controls_line = controls.join(" • ");
+        let nav_controls_line = nav_controls_vec.join(" • ");
 
         // center
         let total_cols = m.terminal_cols as usize;
-        let padding = if total_cols > controls_line.len() {
-            (total_cols - controls_line.len()) / 2
+        let pad_seg = if total_cols > seg_controls_line.len() {
+            (total_cols - seg_controls_line.len()) / 2
+        } else {
+            0
+        };
+        let pad_nav = if total_cols > nav_controls_line.len() {
+            (total_cols - nav_controls_line.len()) / 2
         } else {
             0
         };
@@ -384,11 +364,18 @@ pub fn view(m: &mut Model, out: &mut impl Write) -> std::io::Result<()> {
         queue!(
             out,
             MoveToColumn(0),
-            Print(" ".repeat(padding)),
+            Print(" ".repeat(pad_seg)),
             SetAttribute(style::Attribute::Dim),
-            Print(controls_line.clone()),
+            Print(seg_controls_line.clone()),
             SetAttribute(style::Attribute::Reset),
-            Print(" ".repeat(total_cols.saturating_sub(padding + controls_line.len()))),
+            Print(" ".repeat(total_cols.saturating_sub(pad_seg + seg_controls_line.len()))),
+            MoveToNextLine(1),
+            MoveToColumn(0),
+            Print(" ".repeat(pad_nav)),
+            SetAttribute(style::Attribute::Dim),
+            Print(nav_controls_line.clone()),
+            SetAttribute(style::Attribute::Reset),
+            Print(" ".repeat(total_cols.saturating_sub(pad_nav + nav_controls_line.len()))),
             MoveToNextLine(1)
         )?;
     } else {
@@ -397,11 +384,17 @@ pub fn view(m: &mut Model, out: &mut impl Write) -> std::io::Result<()> {
             out,
             MoveToColumn(0),
             Print(" ".repeat(m.terminal_cols as usize)),
+            MoveToNextLine(1),
+            MoveToColumn(0),
+            Print(" ".repeat(m.terminal_cols as usize)),
             MoveToNextLine(1)
         )?;
     }
 
     if m.exit_prompt {
+        if m.display_mode == DisplayMode::HighResPixel {
+            let _ = write!(out, "\x1b_Ga=d,d=A\x1b\\");
+        }
         let line1 = " Confirm exit? (make sure you save) ";
         let line2 = " [Y]es/[N]o ";
 
@@ -519,5 +512,71 @@ pub fn render_differential(
         style::SetBackgroundColor(style::Color::Reset)
     )?;
 
+    Ok(())
+}
+
+fn base64_encode(data: &[u8]) -> String {
+    const B64_CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity((data.len() + 2) / 3 * 4);
+    for chunk in data.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = if chunk.len() > 1 { chunk[1] as u32 } else { 0 };
+        let b2 = if chunk.len() > 2 { chunk[2] as u32 } else { 0 };
+        let triple = (b0 << 16) | (b1 << 8) | b2;
+        out.push(B64_CHARS[((triple >> 18) & 63) as usize] as char);
+        out.push(B64_CHARS[((triple >> 12) & 63) as usize] as char);
+        if chunk.len() > 1 {
+            out.push(B64_CHARS[((triple >> 6) & 63) as usize] as char);
+        } else {
+            out.push('=');
+        }
+        if chunk.len() > 2 {
+            out.push(B64_CHARS[(triple & 63) as usize] as char);
+        } else {
+            out.push('=');
+        }
+    }
+    out
+}
+
+pub fn render_kitty(
+    img: &image::RgbImage,
+    x_offset: u16,
+    y_offset: u16,
+    char_w: u16,
+    char_h: u16,
+    out: &mut impl Write,
+) -> std::io::Result<()> {
+    let width = img.width();
+    let height = img.height();
+    let raw_bytes = img.as_raw();
+    let b64 = base64_encode(raw_bytes);
+
+    queue!(out, MoveTo(x_offset, y_offset))?;
+
+    const CHUNK_SIZE: usize = 4096;
+    let bytes = b64.as_bytes();
+    let total_len = bytes.len();
+    let mut i = 0;
+    let mut is_first = true;
+
+    while i < total_len {
+        let end = (i + CHUNK_SIZE).min(total_len);
+        let chunk_str = std::str::from_utf8(&bytes[i..end]).unwrap();
+        let m_val = if end == total_len { 0 } else { 1 };
+
+        if is_first {
+            write!(
+                out,
+                "\x1b_Ga=T,f=24,s={},v={},c={},r={},m={},q=2;{}\x1b\\",
+                width, height, char_w, char_h, m_val, chunk_str
+            )?;
+            is_first = false;
+        } else {
+            write!(out, "\x1b_Gm={};{}\x1b\\", m_val, chunk_str)?;
+        }
+        i = end;
+    }
+    out.flush()?;
     Ok(())
 }
