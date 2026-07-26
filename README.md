@@ -12,6 +12,21 @@ This project’s code is under the [MIT](https://choosealicense.com/licenses/mit
 
 I had a bunch of NVIDIA shadowplay clips sitting around and needed a quicker way to do simple tasks like cutting out the important clip from 5-minute, multi-GB files. Fed up with the tedious import, mark, cut, export process with software like OBS or the inbuilt Windows editor (which would hang for multiple minutes on exporting), I built this.
 
+## Table of Contents
+
+- [License](#license)
+- [Motivation](#motivation)
+- [Features](#features)
+- [Requirements](#requirements)
+- [Building](#building)
+- [Usage](#usage)
+  - [CLI Arguments](#cli-arguments)
+- [Keybinds](#keybinds)
+- [Demo Recording](#demo-recording)
+- [Roadmap](#roadmap)
+- [Architecture & Concurrency](#architecture--concurrency)
+- [Benchmarks](#benchmarks)
+
 ## Features
 
 - **In-Terminal Playback**: Uses a custom, high-performance differential ANSI renderer for default low-res playback, with native Kitty graphics protocol support for high-res rendering without heavy external dependencies.
