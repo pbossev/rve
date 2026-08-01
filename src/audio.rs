@@ -84,6 +84,8 @@ impl AudioPlayer {
         };
 
         sink.clear();
+        sink.set_volume(self.volume);
+        sink.set_speed(self.speed);
 
         // bump epoch to cancel older playback threads
         let current_epoch = self.epoch.fetch_add(1, Ordering::SeqCst) + 1;

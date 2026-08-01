@@ -50,7 +50,18 @@ pub fn update(m: &mut Model, evt: Event) -> Result<bool, String> {
                         m.audio_player.pause();
                     } else {
                         m.hovered_item.mode = HoverMode::Segments;
-                        m.audio_player.play();
+                        let ts = m.frame_number as f64 / m.video_metadata.fps;
+                        let seg = m.segment_at_ts(ts);
+                        if !m.is_segment_included(seg) {
+                            if let Some((_next_seg, next_ts)) = m.find_next_included_segment_start(seg) {
+                                m.seek_to(next_ts);
+                            } else {
+                                m.paused = true;
+                                m.audio_player.pause();
+                            }
+                        } else {
+                            m.seek_to(ts);
+                        }
                     }
                 }
                 KeyCode::Char('+') | KeyCode::Char('=') => {
@@ -169,14 +180,30 @@ pub fn update(m: &mut Model, evt: Event) -> Result<bool, String> {
 
     let frames = calc_frames(m);
     if frames > 0 {
-        if let Ok(frame) = m.frame_iterator.skip_frames(frames) {
-            m.current_frame = Some(frame);
-            m.frame_number += frames;
-            update_segment_fwd(m);
-            redraw_needed = true;
+        let target_frame = m.frame_number + frames;
+        let target_ts = target_frame as f64 * m.video_metadata.seconds_per_frame;
+        let current_seg = m.segment_at_ts(target_ts);
+
+        if !m.is_segment_included(current_seg) {
+            if let Some((_next_seg, next_ts)) = m.find_next_included_segment_start(current_seg) {
+                m.seek_to(next_ts);
+                redraw_needed = true;
+            } else {
+                m.paused = true;
+                m.audio_player.pause();
+                redraw_needed = true;
+            }
         } else {
-            m.paused = true;
-            redraw_needed = true;
+            if let Ok(frame) = m.frame_iterator.skip_frames(frames) {
+                m.current_frame = Some(frame);
+                m.frame_number = target_frame;
+                m.hovered_item.position = current_seg;
+                redraw_needed = true;
+            } else {
+                m.paused = true;
+                m.audio_player.pause();
+                redraw_needed = true;
+            }
         }
     }
 
@@ -224,6 +251,10 @@ fn adjust_speed(m: &mut Model, increase: bool) {
     };
     m.speed = speeds[new_idx];
     m.audio_player.set_speed(m.speed as f32);
+    if !m.paused {
+        let ts = m.frame_number as f64 / m.video_metadata.fps;
+        m.seek_to(ts);
+    }
 }
 
 /// Advances timeline segment hover position forward as playhead moves.
@@ -382,6 +413,18 @@ fn toggle_segment(m: &mut Model) {
     if seg_idx < m.segments_included.len() {
         m.segments_included[seg_idx] = !m.segments_included[seg_idx];
         m.needs_to_clear = true; // redraw timeline bar
+
+        if !m.paused && !m.segments_included[seg_idx] {
+            let current_ts = m.frame_number as f64 / m.video_metadata.fps;
+            if m.segment_at_ts(current_ts) == seg_idx {
+                if let Some((_next_seg, next_ts)) = m.find_next_included_segment_start(seg_idx) {
+                    m.seek_to(next_ts);
+                } else {
+                    m.paused = true;
+                    m.audio_player.pause();
+                }
+            }
+        }
     }
 }
 

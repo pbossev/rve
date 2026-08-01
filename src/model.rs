@@ -179,11 +179,52 @@ impl Model {
         })
     }
 
+    /// returns segment index for a given timestamp in seconds.
+    pub fn segment_at_ts(&self, ts: f64) -> usize {
+        for (i, &marker_ts) in self.markers.iter().enumerate() {
+            if ts < marker_ts {
+                return i;
+            }
+        }
+        self.markers.len()
+    }
+
+    /// returns start timestamp in seconds for a segment.
+    pub fn start_ts_of_segment(&self, seg_idx: usize) -> f64 {
+        if seg_idx == 0 {
+            0.0
+        } else if seg_idx <= self.markers.len() {
+            self.markers[seg_idx - 1]
+        } else {
+            self.video_metadata.duration_secs
+        }
+    }
+
+    /// checks if segment is included.
+    pub fn is_segment_included(&self, seg_idx: usize) -> bool {
+        self.segments_included.get(seg_idx).copied().unwrap_or(true)
+    }
+
+    /// finds next included segment index and start timestamp at or after start_seg_idx.
+    pub fn find_next_included_segment_start(&self, start_seg_idx: usize) -> Option<(usize, f64)> {
+        let total_segments = self.markers.len() + 1;
+        for idx in start_seg_idx..total_segments {
+            if self.is_segment_included(idx) {
+                return Some((idx, self.start_ts_of_segment(idx)));
+            }
+        }
+        None
+    }
+
     /// Seeks the video frame iterator and audio engine to the specified timestamp in seconds.
     pub fn seek_to(&mut self, ts: f64) {
-        self.current_frame = self.frame_iterator.goto(ts).ok();
-        self.audio_player.seek(&self.frame_iterator.video_path, ts, self.paused);
+        let bounded_ts = ts.clamp(0.0, self.video_metadata.duration_secs);
+        self.frame_number = (bounded_ts * self.video_metadata.fps).round() as u32;
+        self.current_frame = self.frame_iterator.goto(bounded_ts).ok();
+        self.audio_player.seek(&self.frame_iterator.video_path, bounded_ts, self.paused);
         self.prev_instant = std::time::Instant::now();
         self.accumulated_time = 0.0;
+        self.hovered_item.position = self.segment_at_ts(bounded_ts);
     }
 }
+
