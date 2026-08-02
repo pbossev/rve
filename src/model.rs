@@ -143,8 +143,7 @@ impl Model {
         );
 
         let iter = FrameIterator::new(video_path, render_w, render_h)?;
-        let mut audio_player = AudioPlayer::new();
-        audio_player.seek(&iter.video_path, 0.0, true);
+        let audio_player = AudioPlayer::new();
 
         Ok(Model {
             paused: true,
@@ -221,7 +220,9 @@ impl Model {
         let bounded_ts = ts.clamp(0.0, self.video_metadata.duration_secs);
         self.frame_number = (bounded_ts * self.video_metadata.fps).round() as u32;
         self.current_frame = self.frame_iterator.goto(bounded_ts).ok();
-        self.audio_player.seek(&self.frame_iterator.video_path, bounded_ts, self.paused);
+        if !self.paused {
+            self.audio_player.seek(&self.frame_iterator.video_path, bounded_ts, false);
+        }
         self.prev_instant = std::time::Instant::now();
         self.accumulated_time = 0.0;
         self.hovered_item.position = self.segment_at_ts(bounded_ts);
