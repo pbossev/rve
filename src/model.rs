@@ -106,6 +106,8 @@ pub struct Model {
     pub terminal_state: TerminalState,
     /// Playback speed multiplier (e.g. 0.5, 1.0, 2.0).
     pub speed: f64,
+    /// In-memory ring buffer cache of recent frames.
+    pub frame_cache: std::collections::VecDeque<(u32, image::RgbImage)>,
 }
 
 /// Basic metadata properties of the input video file.
@@ -175,7 +177,27 @@ impl Model {
             should_exit: false,
             terminal_state: TerminalState::default(),
             speed: 1.0,
+            frame_cache: std::collections::VecDeque::with_capacity(60),
         })
+    }
+
+    /// caches a decoded video frame.
+    pub fn cache_frame(&mut self, frame_num: u32, frame: image::RgbImage) {
+        if self.frame_cache.iter().any(|(num, _)| *num == frame_num) {
+            return;
+        }
+        if self.frame_cache.len() >= 60 {
+            self.frame_cache.pop_front();
+        }
+        self.frame_cache.push_back((frame_num, frame));
+    }
+
+    /// retrieves a cached video frame if available.
+    pub fn get_cached_frame(&self, frame_num: u32) -> Option<image::RgbImage> {
+        self.frame_cache
+            .iter()
+            .find(|(num, _)| *num == frame_num)
+            .map(|(_, frame)| frame.clone())
     }
 
     /// returns segment index for a given timestamp in seconds.
@@ -218,8 +240,20 @@ impl Model {
     /// Seeks the video frame iterator and audio engine to the specified timestamp in seconds.
     pub fn seek_to(&mut self, ts: f64) {
         let bounded_ts = ts.clamp(0.0, self.video_metadata.duration_secs);
-        self.frame_number = (bounded_ts * self.video_metadata.fps).round() as u32;
-        self.current_frame = self.frame_iterator.goto(bounded_ts).ok();
+        let target_frame = (bounded_ts * self.video_metadata.fps).round() as u32;
+
+        self.frame_number = target_frame;
+        if let Some(cached_img) = self.get_cached_frame(target_frame) {
+            self.current_frame = Some(cached_img);
+        } else {
+            if let Ok(frame) = self.frame_iterator.goto(bounded_ts) {
+                self.cache_frame(target_frame, frame.clone());
+                self.current_frame = Some(frame);
+            } else {
+                self.current_frame = None;
+            }
+        }
+
         if !self.paused {
             self.audio_player.seek(&self.frame_iterator.video_path, bounded_ts, false);
         }

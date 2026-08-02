@@ -102,6 +102,7 @@ pub fn update(m: &mut Model, evt: Event) -> Result<bool, String> {
                             &m.video_metadata,
                             m.display_mode,
                         );
+                        m.frame_cache.clear();
                         m.frame_iterator.resize(w, h);
                         m.needs_to_clear = true;
                     }
@@ -155,6 +156,7 @@ pub fn update(m: &mut Model, evt: Event) -> Result<bool, String> {
             m.terminal_cols = c;
             m.terminal_rows = r;
             m.needs_to_clear = true;
+            m.frame_cache.clear();
 
             let video_aspect = m.video_metadata.width as f64 / m.video_metadata.height as f64;
             let (w, h) =
@@ -168,8 +170,11 @@ pub fn update(m: &mut Model, evt: Event) -> Result<bool, String> {
     }
 
     if m.current_frame.is_none() {
-        m.current_frame = m.frame_iterator.take_frame().ok();
-        redraw_needed = true;
+        if let Ok(frame) = m.frame_iterator.take_frame() {
+            m.cache_frame(m.frame_number, frame.clone());
+            m.current_frame = Some(frame);
+            redraw_needed = true;
+        }
     }
 
     if m.paused {
@@ -195,6 +200,7 @@ pub fn update(m: &mut Model, evt: Event) -> Result<bool, String> {
             }
         } else {
             if let Ok(frame) = m.frame_iterator.skip_frames(frames) {
+                m.cache_frame(target_frame, frame.clone());
                 m.current_frame = Some(frame);
                 m.frame_number = target_frame;
                 m.hovered_item.position = current_seg;
@@ -433,18 +439,23 @@ fn advance(m: &mut Model, direction: i32) {
     let max_frame = (m.video_metadata.duration_secs * m.video_metadata.fps).round() as u32;
 
     if direction > 0 {
-        if let Ok(frame) = m.frame_iterator.take_frame() {
+        let target_frame = (m.frame_number + 1).min(max_frame);
+        if let Some(cached_img) = m.get_cached_frame(target_frame) {
+            m.current_frame = Some(cached_img);
+            m.frame_number = target_frame;
+            m.hovered_item.position = m.segment_at_ts(m.frame_number as f64 / m.video_metadata.fps);
+            m.hovered_item.mode = HoverMode::Segments;
+        } else if let Ok(frame) = m.frame_iterator.take_frame() {
+            m.cache_frame(target_frame, frame.clone());
             m.current_frame = Some(frame);
-            m.frame_number = (m.frame_number + 1).min(max_frame);
-            update_segment_fwd(m);
+            m.frame_number = target_frame;
+            m.hovered_item.position = m.segment_at_ts(m.frame_number as f64 / m.video_metadata.fps);
             m.hovered_item.mode = HoverMode::Segments;
         }
     } else if direction < 0 {
-        m.frame_number = m.frame_number.saturating_sub(1);
-        let ts = m.frame_number as f64 / m.video_metadata.fps;
+        let target_frame = m.frame_number.saturating_sub(1);
+        let ts = target_frame as f64 / m.video_metadata.fps;
         m.seek_to(ts);
-
-        update_segment_back(m);
         m.hovered_item.mode = HoverMode::Segments;
     }
 }
