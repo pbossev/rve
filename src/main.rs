@@ -107,15 +107,35 @@ fn main() -> Result<(), Box<dyn Error>> {
             }
         };
 
-        let event = if poll(timeout)? {
-            read()?
-        } else if !model.paused {
-            Event::Key(KeyEvent::new(KeyCode::Null, KeyModifiers::NONE))
-        } else {
-            continue;
-        };
+        let mut redraw_needed = false;
+        let mut processed_event = false;
 
-        if update::update(&mut model, event)? {
+        if poll(timeout)? {
+            let mut event = read()?;
+            if update::update(&mut model, event)? {
+                redraw_needed = true;
+            }
+            processed_event = true;
+
+            // drain queued input events
+            while poll(Duration::from_millis(0))? {
+                event = read()?;
+                if update::update(&mut model, event)? {
+                    redraw_needed = true;
+                }
+            }
+        } else if !model.paused {
+            if update::update(&mut model, Event::Key(KeyEvent::new(KeyCode::Null, KeyModifiers::NONE)))? {
+                redraw_needed = true;
+            }
+            processed_event = true;
+        }
+
+        if !processed_event {
+            continue;
+        }
+
+        if redraw_needed {
             view::view(&mut model, &mut stdout)?;
             stdout.flush()?;
             if model.needs_to_clear {
