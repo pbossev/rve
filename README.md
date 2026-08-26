@@ -45,8 +45,8 @@ I had a bunch of NVIDIA shadowplay clips sitting around and needed a quicker way
 
 > [!WARNING]
 >
-> - It has **only been tested on Linux** and is **untested on macOS** or Windows.
-> - It may **not build or run** on other operating systems without manual dependency setup (`ffmpeg`, `ffprobe`, `rodio` ALSA/CoreAudio).
+> - It has been tested on **Linux** and **macOS**, and is **untested on Windows**.
+> - It may **not build or run** on Windows without manual dependency setup (`ffmpeg`, `ffprobe`, `rodio`).
 > - Terminal support for high-resolution playback (Kitty graphics) is auto-detected or enabled via `-r`/`--high-res`. Low-res mode is the default.
 
 ## Requirements
