@@ -236,6 +236,44 @@ RVE uses [Criterion.rs](https://bheisler.github.io/criterion.rs/book/index.html)
 | `renderers`      | `differential_100_percent` | ~391.15 µs | -           | 100% frame change (full redraw)  |
 | `renderers`      | `kitty_renderer`           | ~401.07 µs | -           | Native Kitty graphics renderer   |
 
+### Reference Results (Apple M1 Max)
+
+Measured September 4, 2026 on macOS 26.5.2 (build 25F84), Darwin 25.5.0 arm64, Apple M1 Max (10 cores), 32 GiB, `rustc 1.98.0`, `ffmpeg 9.0.1`.
+
+| Benchmark        | Test                       | Time (avg) | Throughput  | Notes                            |
+| :--------------- | :------------------------- | :--------- | :---------- | :------------------------------- |
+| `segment_export` | `sequential`               | ~167.71 ms | -           | 4 segments of 5 seconds each     |
+| `segment_export` | `parallel`                 | ~50.40 ms  | -           | ~3.33x speedup over sequential   |
+| `frame_decode`   | `take_frame_lowres`        | ~254.61 µs | ~3,928 fps  | `rawvideo` pipe decode overhead  |
+| `renderers`      | `differential_0_percent`   | ~36.44 µs  | -           | 0% frame change (static scene)   |
+| `renderers`      | `differential_10_percent`  | ~131.89 µs | -           | 10% frame change                 |
+| `renderers`      | `differential_100_percent` | ~991.80 µs | -           | 100% frame change (full redraw)  |
+| `renderers`      | `kitty_renderer`           | ~181.23 µs | -           | Native Kitty graphics renderer   |
+
+#### Benchmark fixture
+
+The benches read `test_video.mp4` from the repository root, and results depend heavily on
+what that file is. The two tables above predate this note and do not record their fixture,
+so their `frame_decode` row is **not comparable** to the row above.
+
+This run used an 8x `-c copy` loop of `demo/test_video.mp4`:
+
+```bash
+ffmpeg -y -stream_loop 7 -i demo/test_video.mp4 -c copy test_video.mp4
+```
+
+That yields 640x480 H.264 at 25 fps, 42,512 frames, 1,700 s. The loop is required because
+`FrameIterator` is never restarted inside `bench_frame_decode`: on hardware this fast,
+criterion exhausts a 5,314-frame source during warmup and the bench panics with
+`UnexpectedEof`. `segment_export` and `renderers` are unaffected by fixture length --
+export always cuts the first 20 s, and the renderer benches operate on a synthetic image.
+
+Because `renderers` uses that synthetic image rather than the video, those four rows *are*
+comparable across all three tables. Note that the differential renderer's advantage over
+`kitty_renderer` is much smaller here (181.23 µs vs 36.44 µs at 0% change) and inverts at
+full redraw (991.80 µs vs 181.23 µs), where rewriting every pixel costs more than handing
+the frame to the terminal's own graphics protocol.
+
 _Note on `kitty_renderer`: The benchmark uses `gag` to intercept and suppress terminal stdout. In the real application, Kitty graphics transfers uncompressed RGB data to the terminal emulator._
 
 You can run the benchmarks yourself with:
